@@ -5,9 +5,11 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision.datasets import MNIST
 
-class APIAttacks:
-    """API Attacks Class
-    https://arxiv.org/pdf/2101.04535.pdf Page 7
+class PoisonAttacks:
+    """Poison Attacks Class
+    https://arxiv.org/pdf/2101.04535.pdf Page 8
+    Poison Methods:
+    https://arxiv.org/pdf/2006.07709.pdf Page 7 
     """
 
     def __init__(self):
@@ -17,6 +19,7 @@ class APIAttacks:
         self.learning_rate = 0.01
         self.noise_multiplier = 1.1
         self.tau = 0.5
+        self.k = 500
     
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -69,10 +72,10 @@ class APIAttacks:
 
             print(f"Epoch {epoch + 1}/{self.epochs} completed")
 
-    def membership_inference_crafter(self, X_D: np.ndarray, y_D: np.ndarray
+    def static_poison_crafter(self, X_D: np.ndarray, y_D: np.ndarray
                                        ) -> Tuple[Tuple[np.ndarray, np.ndarray], 
                                                   Tuple[np.ndarray, np.ndarray]]:
-        """Create a membership inference crafter. (Crafter 1)
+        """Create a static poison crafter. (Crafter 2)
 
         Args:
             X_D (np.ndarray): Initial Dataset
@@ -83,12 +86,21 @@ class APIAttacks:
         """
 
         # Remove a random example from the dataset to create dataset D0
-        self.random_index = np.random.randint(X_D.shape[0])
-        X_D0 = np.delete(X_D, self.random_index, axis=0)
-        y_D0 = np.delete(y_D, self.random_index)
-        print("Original dataset D:", X_D.shape, y_D.shape)
-        print("Modified dataset D0:", X_D0.shape, y_D0.shape)
-        return (X_D, y_D), (X_D0, y_D0)
+        self.random_index = np.random.choice(X_D.shape[0], self.k, replace=False)
+        X_D0 = X_D[self.random_index]
+        y_D0 = y_D[self.random_index]
+
+        # Perturbate the k random rows to create dataset D1
+        X_D1 = X_D0 + np.random.normal(0, 0.1, X_D0.shape)
+        y_D1 = y_D0
+
+        # Replace the same k number of rows in D with D1 to construct dataset D2
+        X_D2 = X_D.copy()
+        y_D2 = y_D.copy()
+        X_D2[self.random_index] = X_D1
+        y_D2[self.random_index] = y_D1
+
+        return (X_D, y_D), (X_D2, y_D2)
 
     def api_craft_trainer(self, D, D0) -> nn.Sequential:
         """Train a model on the randomly selected original dataset or the modified dataset. (Crafter 1)
@@ -143,7 +155,7 @@ class APIAttacks:
             bool: True if the model was trained on the original dataset, False otherwise
         """
 
-        # Extract the differing example and its label
+        # Extract the differing examples and its label
         X_diff = D[0][self.random_index].reshape(1, -1).astype('float32') / 255
         y_diff = np.array([D[1][self.random_index]])
 

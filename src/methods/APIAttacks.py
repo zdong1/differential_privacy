@@ -18,6 +18,10 @@ class APIAttacks:
         self.noise_multiplier = 1.1
         self.tau = 0.5
         self.dataset = dataset
+        self.clipping_norm = 1.0
+        self.epsilon = 4
+        self._selected = None
+        self.guess = None
     
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -65,6 +69,9 @@ class APIAttacks:
                 loss: torch.Tensor = criterion(output, labels)
                 loss.backward()
 
+                # Clipping gradients
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.clipping_norm)
+
                 # Add noise to the gradients for privacy
                 for param in model.parameters():
                     noise: torch.Tensor = torch.randn_like(param.grad) * self.noise_multiplier
@@ -111,6 +118,10 @@ class APIAttacks:
 
         # Pick one of the datasets randomly
         selected_dataset = np.random.choice([0, 1])
+
+        # Add the selected dataset to private attribute
+        self._selected = selected_dataset
+
         if selected_dataset == 0:
             print("Training on Original Dataset")
             selected_dataset = D
@@ -166,7 +177,9 @@ class APIAttacks:
             loss = criterion(output, y_diff_tensor).item()
 
         # Make a guess based on the loss value
-        if loss < self.tau:
+        if loss <= self.tau:
+            self.guess = 1
             return True
         else:
+            self.guess = 0
             return False

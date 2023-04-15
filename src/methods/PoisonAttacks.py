@@ -20,7 +20,11 @@ class PoisonAttacks:
         self.noise_multiplier = 1.1
         self.tau = 0.5
         self.dataset = dataset
-    
+        self.clipping_norm = 1.0
+        self.epsilon = 4
+        self._selected = None
+        self.guess = None
+
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Load the MNIST dataset and return the data and labels.
@@ -66,6 +70,9 @@ class PoisonAttacks:
                 output: torch.Tensor = model(data)
                 loss: torch.Tensor = criterion(output, labels)
                 loss.backward()
+
+                # Clipping gradients
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.clipping_norm)
 
                 # Add noise to the gradients for privacy
                 for param in model.parameters():
@@ -122,6 +129,10 @@ class PoisonAttacks:
 
         # Pick one of the datasets randomly
         selected_dataset = np.random.choice([0, 1])
+        
+        # Add selected dataset to private attribute
+        self._selected = selected_dataset
+
         if selected_dataset == 0:
             print("Training on Original Dataset")
             selected_dataset = D
@@ -177,7 +188,9 @@ class PoisonAttacks:
             loss = criterion(output, y_diff_tensor).item()
 
         # Make a guess based on the loss value
-        if loss < self.tau:
+        if loss <= self.tau:
+            self.guess = 1
             return True
         else:
+            self.guess = 0
             return False

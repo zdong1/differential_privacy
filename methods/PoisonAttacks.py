@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-from torchvision.datasets import MNIST
+from torchvision.datasets import MNIST, CIFAR100, CIFAR10
 
 class PoisonAttacks:
     """Poison Attacks Class
@@ -12,14 +12,14 @@ class PoisonAttacks:
     https://arxiv.org/pdf/2006.07709.pdf Page 7 
     """
 
-    def __init__(self):
+    def __init__(self, dataset:str = 'MNIST'):
         self.random_index = None
         self.epochs = 10
         self.batch_size = 32
         self.learning_rate = 0.01
         self.noise_multiplier = 1.1
         self.tau = 0.5
-        self.k = 500
+        self.dataset = dataset
     
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -27,7 +27,12 @@ class PoisonAttacks:
         @return: The data and labels
         """
         # Load the MNIST dataset
-        (x_train, y_train), (x_test, y_test) = MNIST('./data')
+        if self.dataset == 'CIFAR10':
+            (x_train, y_train), (x_test, y_test) = CIFAR10('./data')
+        elif self.dataset == 'CIFAR100':
+            (x_train, y_train), (x_test, y_test) = CIFAR100('./data')
+        else:
+            (x_train, y_train), (x_test, y_test) = MNIST('./data')
 
         # Flatten the images
         x_train = x_train.reshape(x_train.shape[0], -1)

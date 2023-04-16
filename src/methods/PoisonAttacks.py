@@ -24,6 +24,7 @@ class PoisonAttacks:
         self.epsilon = 4
         self._selected = None
         self.guess = None
+        self.k = 100
 
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """

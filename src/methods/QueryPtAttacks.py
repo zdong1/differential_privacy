@@ -4,12 +4,13 @@ import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision.datasets import MNIST, CIFAR100, CIFAR10
+import copy
 
-class WhiteboxMembershipAttacks:
-    """Whitebox Mbship Attacks Class
-    https://arxiv.org/pdf/2101.04535.pdf Page 9
-    Poison Methods:
-    https://arxiv.org/pdf/2006.07709.pdf Page 7 
+class QueryPtAttacks:
+    """Query Point Attacks Class
+    https://arxiv.org/pdf/2101.04535.pdf Page 10 
+    In the paper, this is called
+    'adaptive poisoning attacks'
     """
 
     def __init__(self, dataset:str = 'MNIST'):
@@ -25,8 +26,11 @@ class WhiteboxMembershipAttacks:
         self.epsilon = 4
         self._selected = None
         self.guess = None
-        self.k = 100
-        
+        self.k = 1
+        self.xq = None
+        self.yq = None
+        self._nclasses = 10
+
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Load the MNIST dataset and return the data and labels.
@@ -48,6 +52,25 @@ class WhiteboxMembershipAttacks:
         x_d = np.concatenate((x_train, x_test), axis=0)
         y_d = np.concatenate((y_train, y_test), axis=0)
         return x_d, y_d
+    
+    def generate_malicious_example(self, model, query_input, num_classes):
+        query_input = torch.tensor(query_input, dtype=torch.float, requires_grad=True)
+        optimizer = torch.optim.SGD([query_input], lr=self.learning_rate)
+
+        for _ in range(3):  # Perform few steps of optimization
+            model_copy = copy.deepcopy(model)  # Copy the model temporarily
+            model_copy.zero_grad()
+            query_output = model_copy(query_input)
+            query_loss = -torch.sum(query_output)
+            query_loss.backward()
+
+            optimizer.zero_grad()
+            query_input.grad = query_output.grad_input[0]
+            optimizer.step()
+
+        malicious_x = query_input.detach().numpy()
+        malicious_y = np.random.randint(num_classes)
+        return malicious_x, malicious_y
 
     def dp_sgd(self, model: torch.nn.Module, criterion: torch.nn.Module, 
                dataloader: torch.utils.data.DataLoader) -> None:
@@ -85,11 +108,24 @@ class WhiteboxMembershipAttacks:
                 # Update the model parameters
                 optimizer.step()
 
+                # Generate a malicious example using double backpropagation
+                malicious_x, malicious_y = self.generate_malicious_example(model, self.xq, self._nclasses)
+                malicious_x_tensor = torch.tensor(malicious_x, dtype=torch.float).unsqueeze(0)
+                malicious_y_tensor = torch.tensor(malicious_y, dtype=torch.long).unsqueeze(0)
+
+                # Train the model on the malicious example
+                optimizer.zero_grad()
+                output = model(malicious_x_tensor)
+                loss = criterion(output, malicious_y_tensor)
+                loss.backward()
+                
+                # The second backpropagation step
+                optimizer.step()
                 # Record the loss
                 self.step_loss.append(loss.item())
             print(f"Epoch {epoch + 1}/{self.epochs} completed")
 
-    def static_poison_crafter(self, X_D: np.ndarray, y_D: np.ndarray
+    def adaptive_poison_crafter(self, X_D: np.ndarray, y_D: np.ndarray
                                        ) -> Tuple[Tuple[np.ndarray, np.ndarray], 
                                                   Tuple[np.ndarray, np.ndarray]]:
         """Create a static poison crafter. (Crafter 2)
@@ -110,14 +146,10 @@ class WhiteboxMembershipAttacks:
         # Perturbate the k random rows to create dataset D1
         X_D1 = X_D0 + np.random.normal(0, 0.1, X_D0.shape)
         y_D1 = y_D0
+        self.xq = X_D1
+        self.yq = y_D1
 
-        # Replace the same k number of rows in D with D1 to construct dataset D2
-        X_D2 = X_D.copy()
-        y_D2 = y_D.copy()
-        X_D2[self.random_index] = X_D1
-        y_D2[self.random_index] = y_D1
-
-        return (X_D, y_D), (X_D2, y_D2)
+        return (X_D, y_D), (X_D1, y_D1)
 
     def whitebox_craft_trainer(self, D, D0) -> nn.Sequential:
         """Train a model on the randomly selected original dataset or the modified dataset. (Crafter 2)

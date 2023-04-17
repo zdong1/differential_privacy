@@ -31,6 +31,7 @@ class GradientAttacks:
         self._nclasses = 10
         self.q = 0.5 #Malicious Attack Probability
         self.grad = []
+        
     def data_loading(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Load the MNIST dataset and return the data and labels.

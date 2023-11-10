@@ -6,22 +6,22 @@ class PolicyGradientAgent:
         self.theta = np.random.rand(num_states, num_actions)
         self.alpha = alpha
         self.horizon = arbitrary_horizon_pm
-    
+
     def softmax_policy(self, state):
         preferences = state @ self.theta
         max_preference = np.max(preferences)
         exp_preferences = np.exp(preferences - max_preference)
         return exp_preferences / np.sum(exp_preferences)
-    
+   
     def choose_action(self, state):
         probabilities = self.softmax_policy(state)
         return np.random.choice(len(probabilities), p=probabilities)
-    
+   
     def update_parameters(self, trajectory):
         self.total_reward = sum(reward for _, _, _, reward in trajectory)
         for state, action, _, _ in trajectory:
             self.theta[:, action] += self.alpha * self.total_reward * (state - np.sum(state @ self.theta))
-    
+               
     def train(self, mdp, epochs):
         for epoch in range(epochs):
             state = mdp.initial_state()  # Assuming initial_state method

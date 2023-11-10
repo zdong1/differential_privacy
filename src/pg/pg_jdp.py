@@ -120,7 +120,8 @@ def compute_gradient_estimate_jdp(
     for trajectory in trajectories:
         # Clip the total reward to adhere to the sensitivity bounds
         total_reward = min(sum(reward_function(state, action) for state, action in trajectory), R_max)
-
+        gradient_per_trajectory = [torch.zeros_like(param) for param in theta]
+        # true gradient 
         for state, action in trajectory:
             log_prob = torch.log(policy_function(theta, action, state))
 
@@ -129,11 +130,17 @@ def compute_gradient_estimate_jdp(
                 if param.grad is not None:
                     param.grad.zero_()
                 log_prob.backward(retain_graph=True)
-                gradients[i] += param.grad * total_reward
-
+            with torch.no_grad():
+                grad_norm = torch.norm(param.grad)
+                # clipped_grad = param.grad * min(G/ (grad_norm + 1e-6), 1.0)
+                gradient_per_trajectory[i] += param.grad * total_reward /m
+        # add clipping to true gradient
+            gpt_norm = torch.norm(gradient_per_trajectory.grad)
+            clipped_grad = gradient_per_trajectory * min(G/ (gpt_norm + 1e-6), 1.0)
+            param.grad += clipped_grad
     # Adding Gaussian noise for differential privacy
     noisy_gradients = [
-        gradient / m + torch.normal(0, np.sqrt(sigma_squared), size=gradient.shape) 
+        gradient + torch.normal(0, np.sqrt(sigma_squared), size=gradient.shape) 
         for gradient in gradients
     ]
 

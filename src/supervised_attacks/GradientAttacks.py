@@ -4,6 +4,7 @@ import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision.datasets import MNIST, CIFAR100, CIFAR10
+from scipy.stats import norm
 
 class GradientAttacks:
     """Gradient Attacks Class

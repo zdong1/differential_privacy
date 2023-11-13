@@ -128,7 +128,7 @@ class QueryPtAttacks:
     def adaptive_poison_crafter(self, X_D: np.ndarray, y_D: np.ndarray
                                        ) -> Tuple[Tuple[np.ndarray, np.ndarray], 
                                                   Tuple[np.ndarray, np.ndarray]]:
-        """Create a static poison crafter. (Crafter 2)
+        """Create a static poison crafter. (Crafter 3)
 
         Args:
             X_D (np.ndarray): Initial Dataset
